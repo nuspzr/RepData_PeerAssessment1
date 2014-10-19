@@ -5,21 +5,115 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
+First, we load the dataset and transform variables to fit the analysis.
+```{r}
+echo=TRUE
 
+unzip("activity.zip")
+data<-read.csv("activity.csv",header=TRUE)
+data$date<-as.Date(data$date,"%Y-%m-%d")
+```
 
 ## What is mean total number of steps taken per day?
+Missing values will be omitted for this part of the analysis.
 
+First, we create a histogram of total steps taken each day.
+```{r}
+total.steps <- aggregate(data$steps, list(Date=data$date), FUN="sum")
+colnames(total.steps) <- c("date", "steps")
+total.steps.1<-na.omit(total.steps)
 
+library(ggplot2)
+ggplot(data=total.steps.1,aes(date,steps))+
+  geom_bar(stat="identity")+
+  labs(title="Total Number of Steps",x="Date")
+```
+
+Then we calculate the mean and median to total steps taken each day.
+```{r}
+mean.total.steps<-mean(total.steps.1$steps)
+median.total.steps<-median(total.steps.1$steps)
+```
 
 ## What is the average daily activity pattern?
+First, we create a histogram of average steps taken for all 5-minute intervals across a day.
+```{r}
+data.1<-na.omit(data)
+pattern<-aggregate(list(steps=data.1$steps),list(interval=data.1$interval),FUN="mean")
 
+ggplot(data=pattern,aes(x=interval,y=steps))+
+  geom_line()+
+  labs(title="Average Daily Activity Pattern",x="interval",y="average steps")
+
+```
+
+Then we identify the 5-minute interval that on average has maximum number of steps.
+```{r}
+pattern[pattern$steps==max(pattern$steps),]
+```
 
 
 ## Imputing missing values
+First, we identify the total number of rows that contain missing values.
+```{r}
+sum(is.na(data$steps))
+```
 
+Next, we replace the missing values with the mean steps taken in the corresponding 5-minute intervals
+```{r}
+data.filled<-data
 
+for(i in 1:nrow(data.filled)){
+  if(is.na(data.filled$steps[i])){
+    interval<-data.filled$interval[i]
+    filled.value<-pattern$steps[pattern$interval==interval]
+    data.filled$steps[i]<-filled.value}
+}
+
+```
+
+Then we create a histrogram based on the new dataset without missing values.
+```{r}
+total.steps.filled <- aggregate(data.filled$steps, list(Date=data.filled$date), FUN="sum")
+colnames(total.steps.filled) <- c("date", "steps")
+
+ggplot(data=total.steps.filled,aes(date,steps))+
+  geom_bar(stat="identity")+
+  labs(title="Total Number of Steps")
+```
+
+For the new dataset, the mean and median total steps taken each day are calculated as follows.
+```{r}
+mean.total.steps.filled<-mean(total.steps.filled$steps)
+median.total.steps.filled<-median(total.steps.filled$steps)
+
+mean.total.steps.filled-mean.total.steps #compare the means
+median.total.steps.filled-median.total.steps #compare the medians
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+First, we add a new column that indicate weekday status to the dataset with no missing values.
+```{r}
+weekdays<-NULL
+
+for(i in 1:nrow(data.filled)){
+  day<-weekdays(data.filled$date[i])
+  if (day %in% c("Saturday","Sunday")){weekdays<-c(weekdays,"weekend")}
+  else {weekdays<-c(weekdays,"weekday")}
+}
+
+data.filled<-cbind(data.filled,weekdays)
+
+```
+
+Next, we creatte a time series plot that shows steps taken across 5-minute intervals on weekdays vs. weekends.
+```{r}
+pattern.weekdays<-aggregate(list(steps=data.filled$steps),list(interval=data.filled$interval,weekdays=data.filled$weekdays),FUN="mean")
+
+library(lattice)
+xyplot(pattern.weekdays$steps ~ pattern.weekdays$interval | pattern.weekdays$weekdays, 
+       type = "l", layout = c(1, 2), xlab = "5-min Interval", ylab = "Average number of steps")
+```
+
